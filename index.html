@@ -242,7 +242,7 @@ function answer(ch) {
   setTimeout(showQ, 150);
 }
 
-function passed(score, n) { return score * 100 / n >= (test.passRate || 80); }
+function passed(score, n) { return !S.leaves && score * 100 / n >= (test.passRate || 80); }
 function finish() {
   if (!S.done) {
     S.done = true;
@@ -269,7 +269,9 @@ function finish() {
     '<div style="text-align:center;font-size:15px;color:var(--sub)">（' + score + ' / ' + S.plan.length + ' 問せいかい）</div>' +
     (passed(score, S.plan.length)
       ? '<div class="note" style="margin:10px 0;text-align:center;font-size:20px;border:2px solid var(--ok)"><b style="color:var(--ok)">○ 合格</b><br><span style="font-size:15px">8時間目の補習は ありません。</span></div>'
-      : '<div class="note" style="margin:10px 0;text-align:center;font-size:20px;border:2px solid var(--ng)"><b style="color:var(--ng)">× 不合格</b><br><span style="font-size:15px">' + (test.passRate || 80) + '点に たりません。<b>8時間目の補習を うけてください。</b></span></div>') +
+      : '<div class="note" style="margin:10px 0;text-align:center;font-size:20px;border:2px solid var(--ng)"><b style="color:var(--ng)">× 不合格</b><br><span style="font-size:15px">' +
+        (S.leaves ? '<b>画面をはなれた</b>ため、不合格です。' : (test.passRate || 80) + '点に たりません。') +
+        '<b>8時間目の補習を うけてください。</b></span></div>') +
     '<p class="small" style="text-align:center">クラス ' + esc(S.cls) + ' ／ 下4桁 ' + esc(S.sid) + ' ／ 画面をはなれた回数：' + S.leaves + ' 回</p>' +
     '<table><tr><th>No.</th><th></th><th>正しい答え</th></tr>' + rows + '</table></div>' +
     (CFG.formsUrl
