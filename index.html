@@ -340,6 +340,15 @@ setInterval(function () {
   if (gap > 1500 && S && !S.done && now >= graceUntil) { leave(true); back(); }
 }, 400);
 window.addEventListener('focus', back);
+// アプリスイッチャーに入ると画面が小さいカード状に縮小される端末があるため、
+// 画面サイズが大きく（6割未満に）縮んだときも、はなれたとみなす。
+// ※アドレスバーの表示/非表示のような小さな変化（1〜2割程度）は無視する。
+var lastW = window.innerWidth, lastH = window.innerHeight;
+window.addEventListener('resize', function () {
+  var w = window.innerWidth, h = window.innerHeight;
+  if (S && !S.done && (w < lastW * 0.6 || h < lastH * 0.6)) { leave(true); back(); }
+  lastW = w; lastH = h;
+});
 document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 document.addEventListener('copy', function (e) { if (e.target.id !== 'code') e.preventDefault(); });
 
