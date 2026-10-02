@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>漢字小テスト</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--fg:#1d2433;--sub:#5b6577;--line:#d5dae6;--pri:#2457c5;--prifg:#fff;--ok:#0b7a3b;--ng:#b3261e;--warn:#fff4d6;}
+@media (prefers-color-scheme:dark){:root{--bg:#12151c;--card:#1c212c;--fg:#eef1f7;--sub:#a3acbd;--line:#363e50;--pri:#6b94ec;--priff:#10151f;--priff2:0;--ok:#5fd18a;--ng:#ff8a80;--warn:#3a3217;}
+ .btn.pri{color:#10151f}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:"Hiragino Sans","Yu Gothic",Meiryo,sans-serif;font-size:17px;line-height:1.6;
+ -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#app{max-width:520px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+h1{font-size:22px;margin:4px 0 12px}
+.note{background:var(--warn);border-radius:10px;padding:10px 12px;font-size:15px}
+label{display:block;font-weight:bold;margin:12px 0 4px}
+select,input{width:100%;font-size:18px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);-webkit-user-select:text;user-select:text}
+.btn{display:block;width:100%;font-size:19px;padding:15px;margin-top:10px;border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--fg);text-align:center;font-family:inherit}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:#fff;font-weight:bold}
+.btn:disabled{opacity:.5}
+.top{display:flex;justify-content:space-between;font-size:15px;color:var(--sub)}
+.bar{height:12px;background:var(--line);border-radius:6px;overflow:hidden;margin:8px 0 14px}
+.bar>div{height:100%;background:var(--pri);width:100%}
+.bar.low>div{background:var(--ng)}
+.sent{font-size:22px;line-height:2.1;margin:6px 0 16px}
+.sent u{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:5px;font-weight:bold}
+.sent ruby rt{font-size:.5em}
+.qtype{font-size:15px;color:var(--sub)}
+.opt{font-size:22px;padding:16px}
+table{width:100%;border-collapse:collapse;font-size:16px}
+td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+.mk{font-weight:bold;font-size:20px;width:2.2em}
+.mk.o{color:var(--ok)}.mk.x{color:var(--ng)}
+textarea{width:100%;height:96px;font-size:13px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);-webkit-user-select:text;user-select:text;word-break:break-all}
+.score{font-size:40px;font-weight:bold;text-align:center}
+.small{font-size:14px;color:var(--sub)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// 共通関数（学生用アプリと先生用ページの両方に埋め込まれる）
+function cyrb53(str, seed) {
+  seed = seed || 0;
+  var h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+  for (var i = 0, ch; i < str.length; i++) {
+    ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function toB64Url(str) {
+  var bytes = new TextEncoder().encode(str), s = '';
+  for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function fromB64Url(b) {
+  b = b.replace(/-/g, '+').replace(/_/g, '/');
+  while (b.length % 4) b += '=';
+  var s = atob(b), bytes = new Uint8Array(s.length);
+  for (var i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function checkValue(payload) { return cyrb53(SALT + payload).toString(36); }
+function makeCode(obj) {
+  var p = toB64Url(JSON.stringify(obj));
+  return 'KQ1.' + p + '.' + checkValue(p);
+}
+function readCode(code) {
+  var m = /^KQ1\.([A-Za-z0-9_-]+)\.([a-z0-9]+)$/.exec(code.trim());
+  if (!m) return null;
+  var ok = checkValue(m[1]) === m[2], obj = null;
+  try { obj = JSON.parse(fromB64Url(m[1])); } catch (e) { return null; }
+  return { data: obj, ok: ok };
+}
+
+</script>
+<script>
+var SALT = "efd9b338947ebb319a9bafaa";
+var CFG = {"classes": ["1J1", "1J2", "1J3", "1J4", "1C1", "1C2", "1IT1", "1IT2"], "defaultTest": "kanji-u3-3", "baseUrl": "https://wakayamacomputer.github.io/kanji-quiz/", "formsUrl": "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=WY5HKNvbwUa5G9SfM72L5srtmmj2W8lMjz40rjLNHnRURVgxM0lYVDFSR0wzRFUyM1lLWThHNTBZSC4u&r15ae43221acd4bd78369d6f0eb65dffb=%221J1%22&r156fd659b21c4746ba5a95cda8b339ab=%7Bid%7D&r319dcdb4500942c8ab1928d2c542d469=%7Bscore%7D&raab180fa62634f48ba840c43651c7dc9=%7Banswers%7D&r2b784e3a581043c785792b5387a93367=%7Bleaves%7D&r459039fd8bae488691965dabda77afb5=%7Btime%7D&rf6d7d611f6ae493894fc5a0fd7576a40=%7Bcode%7D", "tests": [{"id": "kanji-u3-3", "title": "漢字小テスト Unit3-3", "scope": "Unit3-3 のみ", "fileBase": "漢字13_{class}_Unit3-3", "units": ["3-3"], "total": 10, "types": {"read": 7, "write": 3}, "timeLimit": {"read": 25, "write": 35}, "passRate": 80, "onLeave": "end", "mix": [{"unit": "3-3", "count": 10}]}, {"id": "kanji-u3-4", "title": "漢字小テスト Unit3-3・3-4", "scope": "Unit3-3・3-4", "fileBase": "漢字14_{class}_Unit3-3・3-4", "units": ["3-3", "3-4"], "total": 10, "types": {"read": 7, "write": 3}, "timeLimit": {"read": 25, "write": 35}, "passRate": 80, "onLeave": "end", "mix": [{"unit": "3-3", "count": 4}, {"unit": "3-4", "count": 6}]}, {"id": "kanji-u3-5", "title": "漢字小テスト Unit3-3〜3-5", "scope": "Unit3-3〜3-5", "fileBase": "漢字15_{class}_Unit3-3・3-4・3-5", "units": ["3-3", "3-4", "3-5"], "total": 10, "types": {"read": 7, "write": 3}, "timeLimit": {"read": 25, "write": 35}, "passRate": 80, "onLeave": "end", "mix": [{"unit": "3-3", "count": 2}, {"unit": "3-4", "count": 2}, {"unit": "3-5", "count": 6}]}]};
+var PACK = "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";
+</script>
+<script>
+(function () {
+'use strict';
+var $app = document.getElementById('app');
+var params = new URLSearchParams(location.search);
+// 今週のテストを自動で選ぶ: ①?t=テストID があればそれ ②今日の日付が from〜until に入るテスト
+// ③期間が始まっているもののうち一番新しいテスト ④どれもまだ始まっていなければ、まだ小テストはありません
+function pickTest() {
+  var byId = CFG.tests.filter(function (t) { return t.id === params.get('t'); })[0];
+  if (byId) return byId;
+  var d = new Date(), today = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  var dated = CFG.tests.filter(function (t) { return t.from; });
+  if (!dated.length) return CFG.tests.filter(function (t) { return t.id === CFG.defaultTest; })[0] || CFG.tests[CFG.tests.length - 1];
+  var now = dated.filter(function (t) { return t.from <= today && today <= (t.until || '9999-12-31'); })[0];
+  if (now) return now;
+  var started = dated.filter(function (t) { return t.from <= today; }).sort(function (a, b) { return a.from < b.from ? 1 : -1; })[0];
+  return started || null;
+}
+var test = pickTest();
+if (!test) {
+  document.getElementById('app').innerHTML = '<div class="card"><h1>漢字小テスト</h1><p>まだ 小テストは ありません。<br>先生の しじを まってください。</p></div>';
+  throw new Error('no test yet');
+}
+var KEY = 'kq1:' + test.id;
+var S = null, QS = null, timer = null, away = false, locked = false;
+
+// ---- 問題データの復号（簡易難読化） ----
+function loadQuestions() {
+  var raw = atob(PACK), key = new TextEncoder().encode(SALT), b = new Uint8Array(raw.length);
+  for (var i = 0; i < raw.length; i++) b[i] = raw.charCodeAt(i) ^ key[i % key.length];
+  return JSON.parse(new TextDecoder().decode(b));
+}
+QS = loadQuestions();
+var byId = {}; QS.forEach(function (q) { byId[q.id] = q; });
+
+function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function fmt(s) { // [[対象]] と {漢字|ふりがな}
+  return esc(s).replace(/\{([^|{}]+)\|([^{}]+)\}/g, '<ruby>$1<rt>$2</rt></ruby>')
+    .replace(/\[\[(.+?)\]\]/g, '<u>$1</u>');
+}
+function shuffle(a, rnd) {
+  a = a.slice();
+  for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+  return a;
+}
+
+// ---- 学生ごとの出題（クラス＋学籍番号下4桁から決まる） ----
+function makePlan(cls, sid) {
+  var rnd = mulberry32(cyrb53(test.id + '|' + cls + '|' + sid));
+  var chosen = [], words = {};
+  var readLeft = test.types.read, total = test.total;
+  test.mix.forEach(function (m, mi) {
+    var pool = QS.filter(function (q) { return q.unit === m.unit; });
+    var rd = shuffle(pool.filter(function (q) { return q.type === 'read'; }), rnd);
+    var wr = shuffle(pool.filter(function (q) { return q.type === 'write'; }), rnd);
+    var wantR = Math.round(test.types.read * m.count / total);
+    if (mi === test.mix.length - 1) wantR = readLeft;
+    wantR = Math.max(0, Math.min(wantR, readLeft, rd.length));
+    var wantW = Math.min(m.count - wantR, wr.length);
+    wantR = Math.min(m.count - wantW, rd.length);
+    readLeft -= wantR;
+    // 同じ漢字（教科書の見出しの1字）は1回だけ。まず違う漢字から1問ずつ選び、足りないときだけ同じ漢字の別の語から選ぶ
+    var kj = shuffle(Object.keys(pool.reduce(function (o, q) { o[q.kanji] = 1; return o; }, {})), rnd), usedK = {};
+    function pickBy(type, n) {
+      var got = 0;
+      kj.forEach(function (k) {
+        if (got >= n || usedK[k]) return;
+        var c = shuffle(pool.filter(function (q) { return q.kanji === k && q.type === type && !words[q.word]; }), rnd)[0];
+        if (c) { chosen.push(c); words[c.word] = 1; usedK[k] = 1; got++; }
+      });
+      return got;
+    }
+    function fill(type, n) {
+      shuffle(pool.filter(function (q) { return q.type === type && !words[q.word]; }), rnd).slice(0, n).forEach(function (q) { chosen.push(q); words[q.word] = 1; });
+    }
+    var needR = wantR - pickBy('read', wantR), needW = wantW - pickBy('write', wantW);
+    fill('read', needR); fill('write', needW);
+  });
+  chosen = shuffle(chosen, rnd);
+  return chosen.map(function (q) { return { id: q.id, o: shuffle([0, 1, 2, 3], rnd) }; });
+}
+function opts(q) { return [q.answer].concat(q.w); }
+
+// ---- 画面 ----
+function startScreen() {
+  var cls = CFG.classes.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+  $app.innerHTML = '<div class="card"><h1>' + esc(test.title) + '</h1>' +
+    '<div class="note">・全部で <b>' + test.total + '問</b>。1問ごとに制限時間があります。<br>' +
+    '・前の問題にはもどれません。<br>・教科書やスマホの他のアプリは見ません。<b>' + (test.onLeave === 'end' ? '画面をはなれると、その時点でテストが おわります。' : '画面をはなれると記録されます。') + '</b><br>' +
+    '・テストは<b>1回だけ</b>です。</div>' +
+    '<label>クラス</label><select id="cls"><option value="">えらんでください</option>' + cls + '</select>' +
+    '<label>学籍番号の下4桁（すうじ）</label><input id="sid" inputmode="numeric" maxlength="4" placeholder="例：1234" autocomplete="off">' +
+    '<div id="err" class="small" style="color:var(--ng);min-height:1.5em"></div>' +
+    '<button class="btn pri" id="go">テストをはじめる</button></div>';
+  document.getElementById('go').onclick = function () {
+    var c = document.getElementById('cls').value, s = document.getElementById('sid').value.trim();
+    if (!c) return err('クラスをえらんでください。');
+    if (!/^\d{4}$/.test(s)) return err('学籍番号の下4桁を、すうじ4つで入れてください。');
+    // ブラウザの確認ダイアログは「画面をはなれた」と誤検知されるため、画面の中で確認する
+    $app.innerHTML = '<div class="card"><h1>これで いいですか？</h1><p style="font-size:20px">クラス：<b>' + esc(c) + '</b><br>学籍番号 下4桁：<b>' + esc(s) + '</b></p>' +
+      '<div class="note">はじめると、やり直しは できません。</div>' +
+      '<button class="btn pri" id="yes">はい、テストをはじめる</button><button class="btn" id="no">もどる</button></div>';
+    document.getElementById('no').onclick = startScreen;
+    document.getElementById('yes').onclick = function () {
+      S = { cls: c, sid: s, plan: makePlan(c, s), i: 0, res: [], leaves: 0, lv: 0, t0: Date.now(), qs: 0, done: false };
+      if (!S.plan.length) { S = null; startScreen(); return; }
+      save(); showQ();
+    };
+  };
+  function err(m) { document.getElementById('err').textContent = m; }
+}
+
+var graceUntil = 0;
+function showQ() {
+  clearInterval(timer); locked = false; graceUntil = Date.now() + 1500;
+  if (S.i >= S.plan.length) return finish();
+  var p = S.plan[S.i], q = byId[p.id], lim = test.timeLimit[q.type];
+  if (!S.qs) { S.qs = Date.now(); S.lv = 0; save(); }
+  var o = opts(q), shown = p.o.map(function (k) { return o[k]; });
+  $app.innerHTML = '<div class="card"><div class="top"><span>第 ' + (S.i + 1) + ' 問 / ' + S.plan.length + '</span><span id="sec"></span></div>' +
+    '<div class="bar" id="bar"><div id="fill"></div></div>' +
+    '<div class="qtype">' + (q.type === 'read' ? '下線の言葉の<b>読み</b>を えらんでください' : 'ひらがなに合う<b>漢字</b>を えらんでください') + '</div>' +
+    '<div class="sent">' + fmt(q.sentence) + '</div>' +
+    shown.map(function (t, i) { return '<button class="btn opt" data-i="' + i + '">' + esc(t) + '</button>'; }).join('') + '</div>';
+  Array.prototype.forEach.call($app.querySelectorAll('.opt'), function (b) {
+    b.onclick = function () { answer(+b.getAttribute('data-i')); };
+  });
+  function tick() {
+    var left = lim - (Date.now() - S.qs) / 1000;
+    if (left <= 0) { answer(-1); return; }
+    document.getElementById('sec').textContent = '残り ' + Math.ceil(left) + ' 秒';
+    document.getElementById('fill').style.width = (left / lim * 100) + '%';
+    document.getElementById('bar').className = 'bar' + (left <= 5 ? ' low' : '');
+  }
+  tick(); timer = setInterval(tick, 100);
+}
+
+function answer(ch) {
+  if (locked) return; locked = true; clearInterval(timer);
+  var p = S.plan[S.i], q = byId[p.id];
+  var ok = ch >= 0 && p.o[ch] === 0;
+  if (ok && test.onLeave === 'wrong' && S.lv) ok = false;
+  S.res.push({ ch: ch, ok: ok ? 1 : 0, lv: S.lv, t: Math.round((Date.now() - S.qs) / 100) / 10 });
+  S.i++; S.qs = 0; S.lv = 0; save();
+  setTimeout(showQ, 150);
+}
+
+function passed(score, n) { return !S.leaves && score * 100 / n >= (test.passRate || 80); }
+function finish() {
+  if (!S.done) {
+    S.done = true;
+    var score = S.res.reduce(function (a, r) { return a + r.ok; }, 0);
+    S.code = makeCode({
+      t: test.id, c: S.cls, s: S.sid, sc: score, n: S.plan.length, pf: passed(score, S.plan.length) ? 1 : 0,
+      a: S.res.map(function (r) { return r.ok; }).join(''),
+      ch: S.res.map(function (r) { return r.ch < 0 ? 'x' : r.ch; }).join(''),
+      lv: S.leaves, lq: S.res.map(function (r) { return r.lv ? 1 : 0; }).join(''),
+      d: Math.round((Date.now() - S.t0) / 1000), q: S.plan.map(function (p) { return p.id; }).join(',')
+    });
+    save();
+  }
+  var score = S.res.reduce(function (a, r) { return a + r.ok; }, 0);
+  var rows = S.res.map(function (r, i) {
+    var q = byId[S.plan[i].id];
+    return '<tr><td>' + (i + 1) + '</td><td class="mk ' + (r.ok ? 'o' : 'x') + '">' + (r.ok ? '○' : '×') + '</td><td>' +
+      esc(q.type === 'read' ? q.answer : q.answer) + (r.ch === -1 ? ' <span class="small">（時間切れ）</span>' : '') +
+      (r.ch === -2 ? ' <span class="small">（テスト終了のため）</span>' : '') +
+      (r.lv ? ' <span class="small">（画面をはなれた）</span>' : '') + '</td></tr>';
+  }).join('');
+  $app.innerHTML = '<div class="card"><h1>テストおわり</h1>' +
+    (S.ended ? '<div class="note" style="margin-bottom:10px"><b>画面をはなれたので、テストが おわりました。</b> のこりの もんだいは ×です。</div>' : '') + '<div class="score">' + Math.round(score * 100 / S.plan.length) + ' 点</div>' +
+    '<div style="text-align:center;font-size:15px;color:var(--sub)">（' + score + ' / ' + S.plan.length + ' 問せいかい）</div>' +
+    (passed(score, S.plan.length)
+      ? '<div class="note" style="margin:10px 0;text-align:center;font-size:20px;border:2px solid var(--ok)"><b style="color:var(--ok)">○ 合格</b><br><span style="font-size:15px">8時間目の補習は ありません。</span></div>'
+      : '<div class="note" style="margin:10px 0;text-align:center;font-size:20px;border:2px solid var(--ng)"><b style="color:var(--ng)">× 不合格</b><br><span style="font-size:15px">' +
+        (S.leaves ? '<b>画面をはなれた</b>ため、不合格です。' : (test.passRate || 80) + '点に たりません。') +
+        '<b>8時間目の補習を うけてください。</b></span></div>') +
+    '<p class="small" style="text-align:center">クラス ' + esc(S.cls) + ' ／ 下4桁 ' + esc(S.sid) + ' ／ 画面をはなれた回数：' + S.leaves + ' 回</p>' +
+    '<table><tr><th>No.</th><th></th><th>正しい答え</th></tr>' + rows + '</table></div>' +
+    (CFG.formsUrl
+      ? '<div class="card"><h1>けっかを出す</h1><div class="note">下のボタンを おして、<b>Formsで「送信」</b>を おしてください。<br>入力は いりません。</div>' +
+        '<button class="btn pri" id="send">① けっかを出す（Forms）</button>' +
+        '<details style="margin-top:14px"><summary class="small">ボタンが ひらかないとき</summary>' +
+        '<p class="small">下のコードをコピーして、先生に 見せてください。</p></details>' +
+        '<textarea id="code" readonly>' + esc(S.code) + '</textarea>' +
+        '<button class="btn" id="cp">コードをコピーする</button><div id="cpm" class="small"></div></div>'
+      : '<div class="card"><h1>結果コード</h1><div class="note">下のコードを<b>ぜんぶコピー</b>して、先生に出してください。</div>' +
+        '<textarea id="code" readonly>' + esc(S.code) + '</textarea>' +
+        '<button class="btn pri" id="cp">コードをコピーする</button><div id="cpm" class="small"></div></div>');
+  var sendBtn = document.getElementById('send');
+  if (sendBtn) sendBtn.onclick = function () {
+    var vals = {
+      test: test.title, class: S.cls, id: S.sid, score: Math.round(score * 100 / S.plan.length), total: S.plan.length, result: passed(score, S.plan.length) ? '合格' : '不合格',
+      answers: S.res.map(function (r) { return r.ok ? '○' : '×'; }).join(''),
+      leaves: S.leaves,
+      leaveQs: S.res.map(function (r, i) { return r.lv ? i + 1 : ''; }).filter(String).join(' '),
+      time: Math.round((Date.now() - S.t0) / 1000), code: S.code
+    };
+    var u = CFG.formsUrl;
+    if (u.indexOf('{class}') < 0 && u.toLowerCase().indexOf('%7bclass%7d') < 0) { // 選択肢の質問: 事前入力で選んだ1つ目のクラスを置き換える
+      u = u.replace(new RegExp('=(%22)?' + encodeURIComponent(CFG.classes[0]) + '(%22)?(?=&|$)'),
+        function (m, q1, q2) { return '=' + (q1 || '') + '{class}' + (q2 || ''); }); // 引用符(%22)は残す
+    }
+    Object.keys(vals).forEach(function (k) {
+      var v = encodeURIComponent(String(vals[k]));
+      u = u.split('{' + k + '}').join(v).split('%7B' + k + '%7D').join(v).split('%7b' + k + '%7d').join(v);
+    });
+    location.href = u;
+  };
+  document.getElementById('cp').onclick = function () {
+    var t = document.getElementById('code'); t.select(); t.setSelectionRange(0, 99999);
+    var m = document.getElementById('cpm');
+    (navigator.clipboard ? navigator.clipboard.writeText(S.code) : Promise.reject()).then(
+      function () { m.textContent = 'コピーしました。'; },
+      function () { try { document.execCommand('copy'); m.textContent = 'コピーしました。'; } catch (e) { m.textContent = '長押ししてコピーしてください。'; } });
+  };
+}
+
+// ---- 画面離脱の検知（1回はなれるごとに1回） ----
+function leave(hard) {
+  if (!S || S.done) return;
+  if (!hard && Date.now() < graceUntil) return; // 画面の切り替わり直後のフォーカス移動は無視
+  if (hard && test.onLeave === 'end') pendingEnd = true; // 戻ってきたときに終了（再読み込みでは終了しない）
+  if (!away) { away = true; S.leaves++; S.lv = 1; save(); }
+}
+var pendingEnd = false;
+function back() { away = false; if (pendingEnd && S && !S.done) { pendingEnd = false; forceEnd(); } }
+// 「end」設定: 別のアプリに切り替えたら、その時点でテストを終了し、残りは不正解にする
+function forceEnd() {
+  clearInterval(timer);
+  if (S.res.length < S.plan.length) S.res.push({ ch: -3, ok: 0, lv: 1, t: 0 });   // 離脱した問題
+  while (S.res.length < S.plan.length) S.res.push({ ch: -2, ok: 0, lv: 0, t: 0 }); // 残り（出題されず）
+  S.i = S.plan.length; S.ended = 1; S.qs = 0; save(); finish();
+}
+document.addEventListener('visibilitychange', function () { document.hidden ? leave(true) : back(); });
+window.addEventListener('blur', function () { leave(false); }); // フォーカスが外れただけ（通知など）は記録のみ
+// iPhoneのアプリスイッチャー（スワイプして長押しする画面）は、タップして別アプリへ切り替えるまで
+// visibilitychange/blur が発生しないことがある。そのため「時計の監視」でも二重に検知する：
+// 一定間隔で動くはずのタイマーが、実際には大きく間が空いていたら「裏で止まっていた＝はなれていた」とみなす。
+var lastTick = Date.now();
+setInterval(function () {
+  var now = Date.now(), gap = now - lastTick; lastTick = now;
+  if (gap > 1500 && S && !S.done && now >= graceUntil) { leave(true); back(); }
+}, 400);
+window.addEventListener('focus', back);
+// アプリスイッチャーに入ると画面が小さいカード状に縮小される端末があるため、
+// 画面サイズが大きく（6割未満に）縮んだときも、はなれたとみなす。
+// ※アドレスバーの表示/非表示のような小さな変化（1〜2割程度）は無視する。
+var lastW = window.innerWidth, lastH = window.innerHeight;
+window.addEventListener('resize', function () {
+  var w = window.innerWidth, h = window.innerHeight;
+  if (S && !S.done && (w < lastW * 0.6 || h < lastH * 0.6)) { leave(true); back(); }
+  lastW = w; lastH = h;
+});
+document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+document.addEventListener('copy', function (e) { if (e.target.id !== 'code') e.preventDefault(); });
+
+// 先生用: 画面の下の小さい「先生用」を押して合言葉を入れると、このブラウザの受験記録を消す
+var foot = document.createElement('div');
+foot.style.cssText = 'text-align:center;margin:8px 0 24px;font-size:12px;opacity:.5';
+foot.innerHTML = '<a href="#" id="tr" style="color:inherit">先生用</a>';
+document.body.appendChild(foot);
+document.getElementById('tr').onclick = function (e) {
+  e.preventDefault();
+  var c = prompt('先生用の合言葉を入れてください（受験記録を消します）');
+  if (c && c === cyrb53(SALT + 'reset').toString(36).slice(0, 6)) {
+    try { localStorage.removeItem(KEY); } catch (x) {}
+    location.reload();
+  } else if (c) { alert('合言葉がちがいます。'); }
+};
+// ---- 起動 ----
+// 先生用: ?reset=合言葉 で、このブラウザの受験記録を消す（合言葉は build.py の最後に表示される）
+if (params.get('reset') && params.get('reset') === cyrb53(SALT + 'reset').toString(36).slice(0, 6)) {
+  try { localStorage.removeItem(KEY); } catch (e) {}
+  try { history.replaceState(null, '', location.pathname + (params.get('t') ? '?t=' + params.get('t') : '')); } catch (e) {}
+}
+S = load();
+if (S && S.done) finish();
+else if (S && S.plan) { S.leaves++; S.lv = 1; save(); showQ(); } // 再読み込みも「離脱」として記録
+else { S = null; startScreen(); }
+})();
+</script>
+</body>
+</html>
