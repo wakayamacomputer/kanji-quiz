@@ -331,6 +331,14 @@ function forceEnd() {
 }
 document.addEventListener('visibilitychange', function () { document.hidden ? leave(true) : back(); });
 window.addEventListener('blur', function () { leave(false); }); // フォーカスが外れただけ（通知など）は記録のみ
+// iPhoneのアプリスイッチャー（スワイプして長押しする画面）は、タップして別アプリへ切り替えるまで
+// visibilitychange/blur が発生しないことがある。そのため「時計の監視」でも二重に検知する：
+// 一定間隔で動くはずのタイマーが、実際には大きく間が空いていたら「裏で止まっていた＝はなれていた」とみなす。
+var lastTick = Date.now();
+setInterval(function () {
+  var now = Date.now(), gap = now - lastTick; lastTick = now;
+  if (gap > 1500 && S && !S.done && now >= graceUntil) { leave(true); back(); }
+}, 400);
 window.addEventListener('focus', back);
 document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 document.addEventListener('copy', function (e) { if (e.target.id !== 'code') e.preventDefault(); });
