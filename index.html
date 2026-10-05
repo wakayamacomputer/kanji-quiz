@@ -331,6 +331,9 @@ function forceEnd() {
 }
 document.addEventListener('visibilitychange', function () { document.hidden ? leave(true) : back(); });
 window.addEventListener('blur', function () { leave(false); }); // フォーカスが外れただけ（通知など）は記録のみ
+// ページそのものを離れる（閉じる・他のURLへ移動する、bfcacheに入る等）場合の保険。
+window.addEventListener('pagehide', function () { leave(true); });
+window.addEventListener('pageshow', back);
 // iPhoneのアプリスイッチャー（スワイプして長押しする画面）は、タップして別アプリへ切り替えるまで
 // visibilitychange/blur が発生しないことがある。そのため「時計の監視」でも二重に検知する：
 // 一定間隔で動くはずのタイマーが、実際には大きく間が空いていたら「裏で止まっていた＝はなれていた」とみなす。
@@ -349,6 +352,16 @@ window.addEventListener('resize', function () {
   if (S && !S.done && (w < lastW * 0.6 || h < lastH * 0.6)) { leave(true); back(); }
   lastW = w; lastH = h;
 });
+// iPhoneのアプリスイッチャーを開く「画面いちばん下からの上スワイプ」を補助的に検知する。
+// ※OSがこの操作を先に取ってしまい、ページに何も届かないことも多く、効かない場合がある。
+// ボタンなど操作対象からのタッチは誤検知をさけるため無視する（margin: ホームバー付近のみ）。
+document.addEventListener('touchstart', function (e) {
+  if (!S || S.done) return;
+  var t = e.touches && e.touches[0]; if (!t) return;
+  var nearBottom = t.clientY > window.innerHeight - 14;
+  var onControl = e.target && e.target.closest && e.target.closest('.opt,.btn,#tr,select,input');
+  if (nearBottom && !onControl) leave(false);
+}, { passive: true });
 document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 document.addEventListener('copy', function (e) { if (e.target.id !== 'code') e.preventDefault(); });
 
