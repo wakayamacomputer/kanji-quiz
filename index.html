@@ -326,7 +326,14 @@ function leave(hard) {
   if (!away) { away = true; S.leaves++; S.lv = 1; save(); }
 }
 var pendingEnd = false;
-function back() { away = false; if (pendingEnd && S && !S.done) { pendingEnd = false; forceEnd(); } }
+function back() {
+  away = false;
+  if (pendingEnd && S && !S.done) {
+    pendingEnd = false;
+    alert('画面をはなれました。テストはここで終わります。');
+    forceEnd();
+  }
+}
 // 「end」設定: 別のアプリに切り替えたら、その時点でテストを終了し、残りは不正解にする
 function forceEnd() {
   clearInterval(timer);
